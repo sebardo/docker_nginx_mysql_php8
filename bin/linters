@@ -1,0 +1,98 @@
+#!/bin/bash
+
+APP_PWD=$(pwd)
+DOCKER_CONTAINER_PHP='liga-php'
+
+echo -e "\n\e[48;5;214m Linters \e[0m\n"
+
+echo -e "\n\e[94m Checking Composer dependencies... \e[0m\n"
+
+array=( rector/rector symplify/easy-coding-standard phpstan/phpstan )
+for i in "${array[@]}"
+do
+	docker exec -it $DOCKER_CONTAINER_PHP composer show | grep "${i}"
+	if [[ $? -ne 0 ]]
+    then
+        echo "\e[31mDependencies missing! Please run composer install first"
+        exit
+    fi
+done
+
+echo -e "------------------------------------------------------------------------------------------------------------\n"
+echo -e "\e[38;5;214m Easy Coding Standard \e[0m"
+EXTRA_PARAMS=''
+if [[ "$1" == "--fix" ]] ; then
+    EXTRA_PARAMS='--fix'
+fi
+
+docker exec -it $DOCKER_CONTAINER_PHP vendor/bin/ecs check src $EXTRA_PARAMS
+
+if [[ $? -eq 0 ]]
+then
+  echo -e "\n\e[30;48;5;82m Success! \e[0m\n"
+fi
+echo -e "------------------------------------------------------------------------------------------------------------\n"
+
+echo -e "\e[38;5;214m PHP Stan \e[0m"
+
+docker exec -it $DOCKER_CONTAINER_PHP vendor/bin/phpstan analyse -c phpstan.neon
+
+if [[ $? -eq 0 ]]
+then
+  echo -e "\n\e[30;48;5;82m Success! \e[0m\n"
+fi
+echo -e "------------------------------------------------------------------------------------------------------------\n"
+
+echo -e "\e[38;5;214m Rector \e[0m"
+EXTRA_PARAMS='--dry-run'
+if [[ "$1" == "--fix" ]] ; then
+    EXTRA_PARAMS=''
+fi
+
+docker exec -it $DOCKER_CONTAINER_PHP vendor/bin/rector process src $EXTRA_PARAMS
+
+if [[ $? -eq 0 ]]
+then
+  echo -e "\n\e[30;48;5;82m Success! \e[0m\n"
+fi
+echo -e "------------------------------------------------------------------------------------------------------------\n"
+
+echo -e "\e[38;5;214m YAML Linting \e[0m"
+
+docker exec -it $DOCKER_CONTAINER_PHP bin/console lint:yaml config --parse-tags
+
+if [[ $? -eq 0 ]]
+then
+  echo -e "\n\e[30;48;5;82m Success! \e[0m\n"
+fi
+echo -e "------------------------------------------------------------------------------------------------------------\n"
+
+#echo -e "\e[38;5;214m Twig Linting \e[0m"
+
+#docker exec -it $DOCKER_CONTAINER_PHP bin/console lint:twig templates --env=prod
+
+#if [[ $? -eq 0 ]]
+#then
+#  echo -e "\n\e[30;48;5;82m Success! \e[0m\n"
+#fi
+#echo -e "------------------------------------------------------------------------------------------------------------\n"
+
+echo -e "\e[38;5;214m Parameters and Services Linting \e[0m"
+
+docker exec -it $DOCKER_CONTAINER_PHP bin/console lint:container --no-debug
+
+if [[ $? -eq 0 ]]
+then
+  echo -e "\n\e[30;48;5;82m Success! \e[0m\n"
+fi
+echo -e "------------------------------------------------------------------------------------------------------------\n"
+
+echo -e "\e[38;5;214m Composer Config Linting \e[0m"
+
+docker exec -it $DOCKER_CONTAINER_PHP composer validate --strict
+
+if [[ $? -eq 0 ]]
+then
+  echo -e "\n\e[30;48;5;82m Success! \e[0m\n"
+fi
+echo -e "------------------------------------------------------------------------------------------------------------\n"

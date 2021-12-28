@@ -1,0 +1,127 @@
+#!/bin/bash
+
+ORIGIN_PWD=$(pwd)
+DOCKER_PWD='infra/docker'
+DOCKER_PROJECT='app'
+DOCKER_CONTAINER_DB='db'
+DOCKER_CONTAINER_PHP='php'
+DOCKER_CONTAINER_WEB='web'
+
+source $(dirname $0)/.conf
+
+test -f $(dirname $0)/.docker_custom && source $(dirname $0)/.docker_custom
+
+docker_build() {
+    EXTRA_PARAMS=''
+    if [ "$1" == "no-cache" ] ; then
+        EXTRA_PARAMS='--no-cache'
+    fi
+
+    cd $DOCKER_PWD
+
+    docker-compose build --pull $EXTRA_PARAMS
+
+    cd $ORIGIN_PWD
+
+    if [ "$(type -t custom_builds)" == "function" ] ; then
+        custom_builds
+    fi
+}
+
+docker_up() {
+    cd $DOCKER_PWD
+
+    docker-compose -p $DOCKER_PROJECT up -d
+
+    cd $ORIGIN_PWD
+}
+
+docker_down() {
+    cd $DOCKER_PWD
+
+    docker-compose -p $DOCKER_PROJECT down
+
+    cd $ORIGIN_PWD
+}
+
+docker_restart() {
+    cd $DOCKER_PWD
+
+    docker-compose -p $DOCKER_PROJECT down
+    docker-compose -p $DOCKER_PROJECT up -d
+
+    cd $ORIGIN_PWD
+}
+
+docker_db() {
+    docker exec -it $DOCKER_CONTAINER_DB mysql $1
+}
+
+docker_db_load() {
+    docker exec -i $DOCKER_CONTAINER_DB mysql $1
+}
+
+docker_php() {
+    EXTRA_PARAMS="$@"
+    if [ -z "$1" ] ; then
+        EXTRA_PARAMS='bash'
+    fi
+
+    docker exec -it $DOCKER_CONTAINER_PHP $EXTRA_PARAMS
+}
+
+docker_web() {
+    docker exec -it $DOCKER_CONTAINER_WEB bash
+}
+
+install_ca() {
+    curl https://cdn.acilia.es/rootCA.crt --output rootCA.crt
+    sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain rootCA.crt
+    rm rootCA.crt
+}
+
+case $1 in
+    "build")
+        docker_build $2
+    ;;
+
+    "up")
+        docker_up
+    ;;
+
+    "down")
+        docker_down
+    ;;
+
+    "restart")
+        docker_restart
+    ;;
+
+    "db")
+        docker_db $2
+    ;;
+
+    "db-load")
+        docker_db_load $2
+    ;;
+
+    "php")
+        docker_php ${@:2}
+    ;;
+
+    "web")
+        docker_web
+    ;;
+
+    "install-ca")
+        install_ca
+    ;;
+
+    *)
+      if [ "$(type -t custom_commands)" == "function" ] ; then
+          custom_commands $1 $2
+      fi
+    ;;
+esac
+
+exit 0
